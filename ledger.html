@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WPower Sacco Treasury - Master Audit</title>
+    
+    <link rel="manifest" href="/manifest-admin.json">
+    <link rel="icon" type="image/png" href="/icon-admin.png">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        :root { --navy: #0a192f; --primary: #0047AB; --gold: #f1c40f; --bg: #f8fafc; --white: #ffffff; --red: #e74c3c; --green: #2ecc71; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; color: var(--navy); display: flex; height: 100vh; overflow: hidden; }
+        .hidden { display: none !important; }
+        
+        .sidebar { width: 300px; background: var(--navy); color: white; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; border-right: 2px solid var(--gold); justify-content: space-between; }
+        .sidebar-top { flex: 1; }
+        .main-content { flex: 1; padding: 25px; overflow-y: auto; }
+        
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        .modal { background: white; width: 95%; max-width: 600px; padding: 25px; border-radius: 15px; max-height: 85vh; overflow-y: auto; position: relative; color: var(--navy); }
+
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; background: white; padding: 10px; border-radius: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        th { background: #f1f5f9; padding: 12px; text-align: left; color: #64748b; }
+        td { padding: 12px; border-top: 1px solid #eee; }
+        .clickable { color: var(--primary); cursor: pointer; font-weight: bold; text-decoration: underline; }
+
+        input, select, button { width: 100%; padding: 12px; margin: 5px 0 15px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        button:hover { filter: brightness(1.2); }
+        .btn-audit { background: var(--gold); color: var(--navy); }
+        .btn-expense { background: var(--red); }
+        
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 15px; border-radius: 10px; border-left: 4px solid var(--primary); }
+        .rank-item { font-size: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .calc-preview { font-size: 11px; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid var(--gold); }
+        
+        .copyright-notice { font-size: 10px; opacity: 0.4; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 15px; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+
+    <div id="loginOverlay" class="overlay">
+        <div class="modal" style="max-width:320px; text-align:center; background: var(--navy); color: white; border: 2px solid var(--gold);">
+            <img src="/icon-admin.png" width="80" style="margin-bottom:15px; filter: drop-shadow(0 0 5px var(--gold));" onerror="this.src='https://placehold.co/80x80/0a192f/f1c40f?text=WP'">
+            <h2 style="color:var(--gold); margin:0;">WP TREASURY</h2>
+            <p style="font-size:12px; opacity:0.6; margin-bottom:20px;">Executive Audit Access Only</p>
+            <input type="password" id="adminPin" placeholder="Enter Admin PIN" style="text-align:center; background: rgba(255,255,255,0.1); color:white; border:none;">
+            <button onclick="checkAuth()" style="background:var(--gold); color:var(--navy);">SECURE LOGIN</button>
+        </div>
+    </div>
+
+    <div id="historyModal" class="overlay hidden">
+        <div class="modal">
+            <span style="float:right; cursor:pointer; font-size:24px;" onclick="closeHistory()">&times;</span>
+            <h2 id="modalName" style="color:var(--primary)">Member History</h2>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <div id="chatGeneratorModal" class="overlay hidden">
+        <div class="modal" style="max-width:450px;">
+            <span style="float:right; cursor:pointer; font-size:24px;" onclick="closeChatGenerator()">&times;</span>
+            <h3 style="color:var(--primary); margin-top:0;">📋 Copy & Share Update</h3>
+            <p style="font-size:12px; opacity:0.7;">This list is permanently saved under this week's date. Choose an action below:</p>
+            <textarea id="chatTemplateText" rows="10" style="width:100%; padding:10px; border-radius:8px; font-family: monospace; border:1px solid #ccc; font-size: 13px;" readonly></textarea>
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button onclick="copyChatText()" style="background:var(--primary); margin: 0;">Copy to Clipboard</button>
+                <button onclick="shareToWhatsApp()" style="background:var(--green); margin: 0;">📱 Share to WhatsApp</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="appBody" class="sidebar">
+        <div class="sidebar-top">
+            <h2 style="color:var(--gold); margin-bottom:5px;">WPower Treasury</h2>
+            <p style="font-size:10px; opacity:0.7; margin-top:0;">MASTER AUDIT v7.3</p>
+            
+            <div id="rankingSection" style="margin-top:10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                <h4 style="margin:0; color:var(--gold); font-size:12px;">🏆 TOP SAVERS</h4>
+                <div id="topSaversList"></div>
+            </div>
+
+            <hr style="opacity:0.2; margin: 15px 0;">
+            
+            <button style="background: var(--red); color: white; margin-bottom: 15px; font-weight: bold;" onclick="wipeCycleProfits()">
+                🔄 Reset Profits for New Cycle
+            </button>
+
+            <h3>Transactions</h3>
+            <select id="memberSelect"><option>Loading...</option></select>
+            <select id="entryType" onchange="toggleUIOptions()">
+                <option value="SAV_CUSTOM">1. Deposit Savings (Specify Weeks)</option>
+                <option value="LOAN_GET">2. New Loan (+1% Ins)</option>
+                <option value="LOAN_PAY">3. Loan Repayment</option>
+                <option value="REG_PAY">4. Pay Registration Fee</option>
+            </select>
+            
+            <div id="weeksInputBox">
+                <label style="font-size: 11px; opacity: 0.8;">Number of Weeks Covered:</label>
+                <input type="number" id="weeksCount" value="1" min="1" oninput="updateCalculationPreview()">
+            </div>
+            
+            <div id="interestBox" class="hidden">
+                <label style="font-size: 11px; opacity: 0.8;">Interest %</label>
+                <input type="number" id="loanInterest" value="10" oninput="updateCalculationPreview()">
+            </div>
+
+            <input type="number" id="entryAmount" placeholder="Total Amount Deposited (UGX)" oninput="updateCalculationPreview()">
+            <div id="calcPreview" class="calc-preview hidden"></div>
+
+            <button onclick="processEntry()">Post Transaction</button>
+            <hr style="opacity:0.2;">
+            <button class="btn-audit" onclick="runSundayAudit()">Charge Unpaid Reg Fees</button>
+            <button style="background: var(--primary);" onclick="generateDailySavingList()">📋 Generate Savings List Today</button>
+            <button style="background: var(--red); font-size: 11px;" onclick="recallLastBotMessage()">⚠️ Recall Last Bot Message</button>
+            <button class="btn-expense" onclick="openExpenseModal()">Log Group Expense</button>
+            <button style="background:var(--green); margin-top:10px;" onclick="generateExecutivePDF()">Download Executive PDF</button>
+        </div>
+        
+        <div class="copyright-notice">
+            &copy; WORKING POWER SACCO.<br>All Rights Reserved by JDKM SOLUTIONS.
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="stat-grid">
+            <div class="stat-card"><span>Total Savings</span><div id="statSavings" style="font-weight:800;">UGX 0</div></div>
+            <div class="stat-card" style="border-left-color:var(--red);"><span>Total Loans</span><div id="statLoans" style="font-weight:800;">UGX 0</div></div>
+            <div class="stat-card" style="border-left-color:var(--gold);"><span>Interest Profit</span><div id="statProfits" style="font-weight:800;">UGX 0</div></div>
+            <div class="stat-card" style="border-left-color:var(--green);"><span>Operational Fund</span><div id="statRegPool" style="font-weight:800;">UGX 0</div></div>
+        </div>
+
+        <div id="dashboardCapture" class="chart-grid">
+            <div class="card" style="height: 280px;">
+                <p style="font-size: 11px; font-weight: bold; color: var(--primary); margin: 0 0 10px 0;">LIQUIDITY DISTRIBUTION</p>
+                <canvas id="compositionChart"></canvas>
+            </div>
+            <div class="card" style="height: 280px;">
+                <p style="font-size: 11px; font-weight: bold; color: var(--gold); margin: 0 0 10px 0;">SAVINGS TREND ANALYSIS</p>
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 10px 20px;">
+            <input type="text" id="tableSearch" placeholder="🔍 Search member by name..." onkeyup="filterTable()" style="margin: 0; border: none; background: transparent; outline: none;">
+        </div>
+
+        <div class="card">
+            <table id="mainTable">
+                <thead>
+                    <tr><th>Member Name</th><th>Savings</th><th>Loan Balance</th><th>Reg. Fee</th><th>Last Activity</th></tr>
+                </thead>
+                <tbody id="memberTableBody"></tbody>
+            </table>
+        </div>
+
+        <table id="expensesTable" class="hidden">
+            <thead>
+                <tr><th>Description</th><th>Amount (UGX)</th><th>Date Logged</th></tr>
+            </thead>
+            <tbody id="expensesTableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCl3KNh2wQ3d7k9UHL4-yk8Uu5_26FdZCQ",
+            authDomain: "workingpowersaccol.firebaseapp.com",
+            databaseURL: "https://workingpowersaccol-default-rtdb.firebaseio.com",
+            projectId: "workingpowersaccol",
+            storageBucket: "workingpowersaccol.firebasestorage.app",
+            messagingSenderId: "772127893250",
+            appId: "1:772127893250:web:0a644a22fd11094857441b"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let pieChart, lineChart;
+
+        function checkAuth() {
+            if(document.getElementById('adminPin').value === "Bwogable") {
+                document.getElementById('loginOverlay').classList.add('hidden');
+                initEngine();
+            } else { alert("Access Denied."); }
+        }
+
+        function toggleUIOptions() {
+            const type = document.getElementById('entryType').value;
+            document.getElementById('interestBox').className = (type === 'LOAN_GET') ? '' : 'hidden';
+            document.getElementById('weeksInputBox').className = (type === 'SAV_CUSTOM') ? '' : 'hidden';
+            updateCalculationPreview();
+        }
+
+        function updateCalculationPreview() {
+            const type = document.getElementById('entryType').value;
+            const amt = parseInt(document.getElementById('entryAmount').value) || 0;
+            const preview = document.getElementById('calcPreview');
+            
+            if (type === 'LOAN_GET' && amt > 0) {
+                const interest = (amt * parseInt(document.getElementById('loanInterest').value)) / 100;
+                const insurance = (amt * 1) / 100;
+                const total = amt + interest + insurance;
+                preview.innerHTML = `Principal: UGX ${amt.toLocaleString()}<br>Interest: UGX ${interest.toLocaleString()}<br>Insurance (1%): UGX ${insurance.toLocaleString()}<br><strong>Total Owed: UGX ${total.toLocaleString()}</strong>`;
+                preview.classList.remove('hidden');
+            } else if (type === 'SAV_CUSTOM' && amt > 0) {
+                const weeks = parseInt(document.getElementById('weeksCount').value) || 1;
+                preview.innerHTML = `Total Deposited: UGX ${amt.toLocaleString()}<br>Booking Window: <b>${weeks} consecutive Sunday(s)</b><br>Average per week: UGX ${(Math.round(amt/weeks)).toLocaleString()}`;
+                preview.classList.remove('hidden');
+            } else { preview.classList.add('hidden'); }
+        }
+
+        function filterTable() {
+            const input = document.getElementById("tableSearch").value.toUpperCase();
+            const rows = document.getElementById("memberTableBody").getElementsByTagName("tr");
+            for (let i = 0; i < rows.length; i++) {
+                const nameCol = rows[i].getElementsByTagName("td")[0];
+                if (nameCol) {
+                    const textValue = nameCol.textContent || nameCol.innerText;
+                    rows[i].style.display = textValue.toUpperCase().indexOf(input) > -1 ? "" : "none";
+                }
+            }
+        }
+
+        function initEngine() {
+            db.ref('members').on('value', snap => {
+                const tbody = document.getElementById('memberTableBody');
+                const select = document.getElementById('memberSelect');
+                const rankList = document.getElementById('topSaversList');
+                
+                tbody.innerHTML = ""; select.innerHTML = ""; rankList.innerHTML = "";
+                let totals = { s: 0, l: 0, p: 0, r: 0 };
+                let membersArr = [];
+
+                snap.forEach(m => {
+                    const d = m.val();
+                    const s = Number(d.savings) || 0;
+                    const l = Number(d.toPay) || 0;
+                    const p = Number(d.interestProfit) || 0;
+                    const lastDate = d.lastActivityDate ? new Date(d.lastActivityDate) : null;
+                    const isOld = lastDate && (new Date() - lastDate > 30 * 24 * 60 * 60 * 1000) && l > 0;
+
+                    totals.s += s; totals.l += l; totals.p += p;
+                    if(d.regPaid) totals.r += 3000;
+
+                    membersArr.push({ name: d.fullName, savings: s });
+                    select.innerHTML += `<option value="${m.key}">${d.fullName}</option>`;
+                    tbody.innerHTML += `<tr>
+                        <td class="clickable" onclick="showHistory('${m.key}', '${d.fullName}')">${d.fullName}</td>
+                        <td>UGX ${s.toLocaleString()}</td>
+                        <td style="color:${l > 0 ? 'red' : 'green'}">UGX ${l.toLocaleString()} ${isOld ? '<br><span style="color:red; font-size:10px;">⚠️ OVERDUE</span>' : ''}</td>
+                        <td style="color:${d.regPaid ? 'green' : 'red'}">${d.regPaid ? 'PAID' : 'OWING'}</td>
+                        <td><small>${d.lastActivity || '---'}</small></td>
+                    </tr>`;
+                });
+
+                membersArr.sort((a,b) => b.savings - a.savings).slice(0,5).forEach((m, i) => {
+                    rankList.innerHTML += `<div class="rank-item">${i+1}. ${m.name} - ${m.savings.toLocaleString()}</div>`;
+                });
+
+                document.getElementById('statSavings').innerText = "UGX " + totals.s.toLocaleString();
+                document.getElementById('statLoans').innerText = "UGX " + totals.l.toLocaleString();
+                document.getElementById('statProfits').innerText = "UGX " + totals.p.toLocaleString();
+                
+                db.ref('expenses').once('value', expSnap => {
+                    let totalExp = 0;
+                    const expBody = document.getElementById('expensesTableBody');
+                    expBody.innerHTML = ""; 
+
+                    expSnap.forEach(e => {
+                        const val = e.val();
+                        totalExp += Number(val.amt) || 0;
+                        expBody.innerHTML += `<tr><td>${val.desc}</td><td>UGX ${Number(val.amt).toLocaleString()}</td><td>${val.date}</td></tr>`;
+                    });
+                    document.getElementById('statRegPool').innerText = "UGX " + (totals.r - totalExp).toLocaleString();
+                    
+                    updateCharts(totals.s, totals.l);
+                });
+            });
+        }
+
+        function updateCharts(s, l) {
+            const ctxPie = document.getElementById('compositionChart').getContext('2d');
+            const ctxLine = document.getElementById('trendChart').getContext('2d');
+            if(pieChart) pieChart.destroy();
+            if(lineChart) lineChart.destroy();
+
+            pieChart = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Savings', 'Loans'],
+                    datasets: [{
+                        data: [s, l],
+                        backgroundColor: ['#0047AB', '#e74c3c'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            lineChart = new Chart(ctxLine, {
+                type: 'line',
+                data: { 
+                    labels: ['Start', 'Current'], 
+                    datasets: [{ label: 'Savings Growth', data: [0, s], borderColor: '#0047AB', backgroundColor: 'rgba(0, 71, 171, 0.1)', fill: true, tension: 0.4 }] 
+                },
+                options: { maintainAspectRatio: false }
+            });
+        }
+
+        async function generateExecutivePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const now = new Date().toLocaleString();
+            
+            doc.setFillColor(10, 25, 47); doc.rect(0, 0, 210, 40, 'F');
+            doc.setFontSize(22); doc.setTextColor(241, 196, 15);
+            doc.text("WPOWER TREASURY EXECUTIVE AUDIT", 15, 20);
+            doc.setFontSize(10); doc.setTextColor(255, 255, 255);
+            doc.text(`AUDIT DATE: ${now} | MASTER AUDIT v7.3`, 15, 30);
+
+            try {
+                const chartArea = document.getElementById('dashboardCapture');
+                const canvas = await html2canvas(chartArea, { logging: false, useCORS: true });
+                const chartImg = canvas.toDataURL('image/png');
+                doc.addImage(chartImg, 'PNG', 15, 45, 180, 60);
+            } catch (e) {
+                console.log("Chart rendering skipped or caught error: ", e);
+            }
+
+            const s = document.getElementById('statSavings').innerText;
+            const l = document.getElementById('statLoans').innerText;
+            const p = document.getElementById('statProfits').innerText;
+            
+            doc.setTextColor(0);
+            doc.setFontSize(9);
+            doc.text(`TOTAL SAVINGS: ${s}`, 15, 115);
+            doc.text(`LOAN EXPOSURE: ${l}`, 80, 115);
+            doc.text(`TOTAL PROFIT: ${p}`, 145, 115);
+
+            doc.autoTable({ 
+                html: '#mainTable', 
+                startY: 130, 
+                theme: 'grid', 
+                headStyles: { fillColor: [0, 71, 171] }
+            });
+
+            doc.save(`WPower_Audit_${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        // Helper: Get next upcoming Sunday's formatted date (YYYY-MM-DD)
+        function getNextSundayDate() {
+            const d = new Date();
+            const dayNum = d.getDay();
+            const daysToSunday = dayNum === 0 ? 0 : 7 - dayNum;
+            d.setDate(d.getDate() + daysToSunday);
+            return d.toISOString().split('T')[0];
+        }
+
+        // Helper: Calculate Custom Number of Consecutive Sundays
+        function getCustomConsecutiveSundays(weeksCount) {
+            const sundays = [];
+            const upcomingSunday = new Date();
+            const dayNum = upcomingSunday.getDay();
+            const daysToSunday = dayNum === 0 ? 0 : 7 - dayNum;
+            upcomingSunday.setDate(upcomingSunday.getDate() + daysToSunday);
+
+            for (let i = 0; i < weeksCount; i++) {
+                const targetDate = new Date(upcomingSunday);
+                targetDate.setDate(upcomingSunday.getDate() + (i * 7));
+                sundays.push(targetDate.toISOString().split('T')[0]);
+            }
+            return sundays;
+        }
+
+        function processEntry() {
+            const id = document.getElementById('memberSelect').value;
+            const type = document.getElementById('entryType').value;
+            const amt = parseInt(document.getElementById('entryAmount').value);
+            if(!amt || isNaN(amt)) { alert("Enter valid amount"); return; }
+            const ref = db.ref('members/' + id);
+            let finalCharge = amt;
+            let targetSundays = [];
+
+            if(type === 'SAV_CUSTOM') {
+                const weeks = parseInt(document.getElementById('weeksCount').value) || 1;
+                ref.child('savings').transaction(c => (c||0) + amt);
+                targetSundays = getCustomConsecutiveSundays(weeks);
+            }
+            else if(type === 'LOAN_GET') {
+                const interest = (amt * parseInt(document.getElementById('loanInterest').value)) / 100;
+                const insurance = (amt * 1) / 100;
+                finalCharge = amt + interest + insurance;
+                ref.child('toPay').transaction(c => (c||0) + finalCharge);
+                ref.child('interestProfit').transaction(c => (c||0) + interest);
+            }
+            else if(type === 'LOAN_PAY') { 
+                ref.child('toPay').transaction(c => (c||0) - amt); 
+            }
+            else if(type === 'REG_PAY') { 
+                ref.update({ regPaid: true }); 
+                finalCharge = 3000; 
+            }
+
+            db.ref('transactions/' + id).push({ type, amount: finalCharge, date: new Date().toLocaleString() });
+            ref.update({ lastActivity: `${type} on ${new Date().toLocaleDateString()}`, lastActivityDate: new Date().toISOString() });
+            
+            if (targetSundays.length > 0) {
+                targetSundays.forEach(sunday => {
+                    db.ref(`savings_slots/${sunday}/${id}`).set(true);
+                });
+            }
+
+            alert("Entry Successful!");
+            document.getElementById('entryAmount').value = "";
+            document.getElementById('weeksCount').value = "1";
+            document.getElementById('calcPreview').classList.add('hidden');
+        }
+
+        function generateDailySavingList() {
+            const todayStr = getNextSundayDate();
+            
+            db.ref(`savings_slots/${todayStr}`).once('value', slotSnap => {
+                if(!slotSnap.exists()) {
+                    alert(`No members registered for the Sunday list (${todayStr}) yet.`);
+                    return;
+                }
+                
+                db.ref('members').once('value', memberSnap => {
+                    let listText = `*WPOWER SACCO SAVINGS LIST* 💰\n`;
+                    listText += `🗓️ *Week ending:* ${todayStr}\n`;
+                    listText += `━━━━━━━━━━━━━━━━━━━\n\n`;
+                    
+                    let counter = 1;
+                    
+                    slotSnap.forEach(slot => {
+                        const memberId = slot.key;
+                        const memberData = memberSnap.child(memberId).val();
+                        if (memberData) {
+                            listText += `${counter}. ✅ *${memberData.fullName}*\n`;
+                            counter++;
+                        }
+                    });
+                    
+                    listText += `\n━━━━━━━━━━━━━━━━━━━\n`;
+                    listText += `📢 _Thank you for saving! Keep building your future._`;
+                    
+                    document.getElementById('chatTemplateText').value = listText;
+                    document.getElementById('chatGeneratorModal').classList.remove('hidden');
+
+                    db.ref('sacco_group_chat').push({
+                        senderId: "SYSTEM_BOT",
+                        senderName: "📢 Treasury Bot",
+                        text: listText,
+                        timestamp: Date.now()
+                    }).then(() => {
+                        console.log(`Saved list for ${todayStr} posted to Portal Chat.`);
+                    });
+                });
+            });
+        }
+
+        function recallLastBotMessage() {
+            if(!confirm("Are you sure you want to delete the last generated list from the Portal Chatroom?")) return;
+            
+            db.ref('sacco_group_chat')
+              .orderByChild('senderId')
+              .equalTo('SYSTEM_BOT')
+              .limitToLast(1)
+              .once('value', snap => {
+                  if(!snap.exists()) {
+                      alert("No bot messages found to delete.");
+                      return;
+                  }
+                  snap.forEach(child => {
+                      child.ref.remove().then(() => {
+                          alert("Last bot list successfully deleted from portal chat!");
+                      });
+                  });
+              });
+        }
+
+        function copyChatText() {
+            const txt = document.getElementById('chatTemplateText');
+            txt.select();
+            txt.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(txt.value);
+            alert("Chat list copied to clipboard!");
+            closeChatGenerator();
+        }
+
+        function shareToWhatsApp() {
+            const listText = document.getElementById('chatTemplateText').value;
+            const message = encodeURIComponent(listText);
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${message}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
+        function closeChatGenerator() {
+            document.getElementById('chatGeneratorModal').classList.add('hidden');
+        }
+
+        function runSundayAudit() {
+            db.ref('members').once('value', snap => {
+                let count = 0;
+                snap.forEach(m => {
+                    if(!m.val().regPaid) {
+                        db.ref('members/' + m.key).child('toPay').transaction(c => (c||0) + 3000);
+                        db.ref('transactions/' + m.key).push({ type: 'AUDIT_REG_FEE', amount: 3000, date: new Date().toLocaleString() });
+                        count++;
+                    }
+                });
+                alert(`Audit complete: Charged ${count} members.`);
+            });
+        }
+
+        function showHistory(id, name) {
+            document.getElementById('modalName').innerText = name;
+            const list = document.getElementById('historyList');
+            list.innerHTML = "Loading...";
+            document.getElementById('historyModal').classList.remove('hidden');
+            db.ref('transactions/' + id).on('value', snap => {
+                list.innerHTML = "";
+                if(!snap.exists()) {
+                    list.innerHTML = "<p style='font-size:12px;opacity:0.5;'>No transactions recorded yet.</p>";
+                    return;
+                }
+                snap.forEach(t => {
+                    const v = t.val();
+                    list.innerHTML += `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                        <span><b>${v.type}</b><br><small>${v.date}</small></span>
+                        <span style="display:flex; align-items:center; gap:10px;">
+                            <b>UGX ${v.amount.toLocaleString()}</b>
+                            <button onclick="voidTransaction('${id}', '${t.key}', '${v.type}', ${v.amount}, '${name}')" 
+                                    style="background:var(--red); color:white; padding:4px 8px; font-size:10px; width:auto; margin:0; border-radius:5px;">
+                                Void
+                            </button>
+                        </span>
+                    </div>`;
+                });
+            });
+        }
+
+        function voidTransaction(memberId, txId, type, amount, name) {
+            if(!confirm(`⚠️ Warning: Are you sure you want to VOID this transaction of UGX ${amount.toLocaleString()} for ${name}? This will instantly roll back their balance.`)) return;
+
+            const ref = db.ref('members/' + memberId);
+            
+            if(type === 'SAV_CUSTOM') {
+                ref.child('savings').transaction(c => (c||0) - amount);
+            }
+            else if(type === 'LOAN_GET') {
+                ref.child('toPay').transaction(c => (c||0) - amount);
+                const estimatedInterest = Math.round(amount * 0.0909);
+                ref.child('interestProfit').transaction(c => (c||0) - estimatedInterest);
+            }
+            else if(type === 'LOAN_PAY') {
+                ref.child('toPay').transaction(c => (c||0) + amount);
+            }
+            else if(type === 'REG_PAY' || type === 'AUDIT_REG_FEE') {
+                ref.update({ regPaid: false });
+                if(type === 'AUDIT_REG_FEE') {
+                    ref.child('toPay').transaction(c => (c||0) - amount);
+                }
+            }
+
+            db.ref(`transactions/${memberId}/${txId}`).remove().then(() => {
+                alert("Transaction successfully rolled back and voided!");
+                showHistory(memberId, name);
+            });
+        }
+
+        function openExpenseModal() {
+            const desc = prompt("Expense Description:");
+            const amt = parseInt(prompt("Amount (UGX):"));
+            if(amt) db.ref('expenses').push({ desc, amt, date: new Date().toLocaleString() });
+        }
+
+        function closeHistory() { 
+            document.getElementById('historyModal').classList.add('hidden'); 
+            db.ref('transactions').off();
+        }
+
+        function wipeCycleProfits() {
+            const firstCheck = confirm("⚠️ NEW SAVING CYCLE RESET: This will permanently wipe out the 'interestProfit' field for EVERY member to begin a fresh season. Outstanding savings and loan balances will NOT be changed. Do you want to proceed?");
+            if (!firstCheck) return;
+
+            const strictVerify = prompt("To confirm the cycle reset, type 'RESET' exactly below:");
+            if (strictVerify !== "RESET") {
+                alert("Verification failed. Cycle reset cancelled.");
+                return;
+            }
+
+            db.ref('members').once('value', snap => {
+                let batchUpdates = {};
+                snap.forEach(m => {
+                    batchUpdates[`members/${m.key}/interestProfit`] = 0;
+                    batchUpdates[`members/${m.key}/lastActivity`] = `Cycle Reset on ${new Date().toLocaleDateString()}`;
+                });
+
+                db.ref().update(batchUpdates, (err) => {
+                    if (err) {
+                        alert("Database update failed: " + err.message);
+                    } else {
+                        alert("🎉 Success! All historical interest profits have been reset to UGX 0 for the new saving cycle.");
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>

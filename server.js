@@ -1,0 +1,135 @@
+const express = require('express');
+const cors = require('cors');
+const admin = require('firebase-admin');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: "workingpowersaccol"
+  });
+}
+
+const db = admin.firestore();
+
+function getWeeklyTarget(levelNumber) {
+  const level = parseInt(levelNumber, 10) || 1;
+  return 6000 + (level - 1) * 2500;
+}
+
+app.get('/', (req, res) => res.send('WPS SACCO Airtel Webhook Live!'));
+
+app.post('/api/sacco/airtel-webhook', async (req, res) => {
+  try {
+    const message = req.body.message || req.body.text || req.body.content || "";
+    console.log("Raw Airtel SMS received:", message);
+
+    // 1. Extract Amount
+    const amountMatch = message.match(/UGX\s*([\d,]+)/i);
+    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ""), 10) : 0;
+
+    // 2. Extract Reference (e.g., WPS-101 or WPS-101 LOAN)
+    const refMatch = message.match(/(?:Ref|Reference)[:\s]*([A-Z0-9-\s]+?)(?=\.\s*Txn|\.\s*ID|$)/i);
+    const rawRef = refMatch ? refMatch[1].trim().toUpperCase() : "";
+
+    // 3. Extract Txn ID
+    const txnMatch = message.match(/(?:Txn ID|Transaction ID|ID)[:\s]*([A-Z0-9]+)/i);
+    const txnId = txnMatch ? txnMatch[1] : `TXN-${Date.now()}`;
+
+    if (!amount || !rawRef) {
+      return res.status(200).json({ status: "IGNORED", reason: "Invalid format" });
+    }
+
+    // Check duplicate
+    const txnRefDoc = db.collection("transactions").doc(txnId);
+    const doc = await txnRefDoc.get();
+    if (doc.exists) {
+      return res.status(200).json({ status: "ALREADY_PROCESSED" });
+    }
+
+    const isLoanPayment = rawRef.includes("LOAN");
+    const cleanMemberRef = rawRef.replace(/\bLOAN\b/g, "").trim();
+
+    // Find member
+    let memberQuery = await db.collection("members").where("memberRef", "==", cleanMemberRef).get();
+    if (memberQuery.empty) {
+      memberQuery = await db.collection("members").where("name", "==", cleanMemberRef).get();
+    }
+
+    if (memberQuery.empty) {
+      return res.status(404).json({ status: "MEMBER_NOT_FOUND" });
+    }
+
+    const memberDoc = memberQuery.docs[0];
+    const memberId = memberDoc.id;
+    const memberData = memberDoc.data();
+
+    // LOAN REPAYMENT
+    if (isLoanPayment) {
+      const currentLoanBalance = memberData.outstandingLoanBalance || 0;
+      const newLoanBalance = Math.max(0, currentLoanBalance - amount);
+
+      await txnRefDoc.set({
+        memberRef: cleanMemberRef,
+        memberId: memberId,
+        amount: amount,
+        type: "LOAN_REPAYMENT",
+        previousBalance: currentLoanBalance,
+        newBalance: newLoanBalance,
+        rawMessage: message,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await db.collection("members").doc(memberId).update({
+        outstandingLoanBalance: newLoanBalance,
+        lastLoanPaymentDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return res.status(200).json({ status: "SUCCESS_LOAN_REPAYMENT", amountPaid: amount, newLoanBalance });
+    } 
+    // SAVINGS DEPOSIT
+    else {
+      const memberLevel = memberData.level || 1;
+      const weeklyTarget = getWeeklyTarget(memberLevel);
+      const weeksCovered = Math.floor(amount / weeklyTarget);
+
+      let currentPaidUntil = memberData.paidUntilDate ? memberData.paidUntilDate.toDate() : new Date();
+      if (currentPaidUntil < new Date()) {
+        currentPaidUntil = new Date();
+      }
+
+      const newPaidUntil = new Date(currentPaidUntil);
+      newPaidUntil.setDate(newPaidUntil.getDate() + (weeksCovered * 7));
+
+      await txnRefDoc.set({
+        memberRef: cleanMemberRef,
+        memberId: memberId,
+        amount: amount,
+        level: memberLevel,
+        type: "SAVINGS_DEPOSIT",
+        weeksCovered: weeksCovered,
+        rawMessage: message,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await db.collection("members").doc(memberId).update({
+        totalSavings: admin.firestore.FieldValue.increment(amount),
+        paidUntilDate: newPaidUntil,
+        lastSavingsDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return res.status(200).json({ status: "SUCCESS_SAVINGS_DEPOSIT", amountPaid: amount, weeksCovered });
+    }
+
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`WPS Server listening on port ${PORT}`));

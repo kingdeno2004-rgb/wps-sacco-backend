@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="google-site-verification" content="R3l7db0VSEb1MFQGR97JvWAkDi137WzubgAhKqrjekE" />
+    <title>WPowerSacco - Official Portal</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0047AB">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root { --primary: #0047AB; --navy: #1a2a44; --orange: #e67e22; --bg: #f4f7f9; --gold: #f1c40f; --red: #e74c3c; --green: #27ae60; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 15px; margin: 0; min-height: 100vh; justify-content: space-between; box-sizing: border-box; }
+        .container { background: white; padding: 20px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 450px; text-align: center; margin-bottom: 20px; }
+        .hidden { display: none !important; }
+        .motto { font-style: italic; color: #7f8c8d; font-size: 13px; margin-bottom: 20px; display: block; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .card { background: #fff; padding: 15px; border-radius: 15px; border: 1px solid #eee; cursor: pointer; transition: 0.2s; position: relative; }
+        .card:active { transform: scale(0.95); background: #f9f9f9; }
+        .card-label { font-size: 11px; font-weight: 700; color: var(--navy); display: block; margin-top: 5px; }
+
+        .balance-box { background: var(--primary); color: white; padding: 20px; border-radius: 20px; text-align: left; margin-bottom: 15px; }
+        .amount { font-size: 22px; font-weight: 800; }
+        
+        input, select, textarea { width: 100%; padding: 12px; margin: 6px 0; border: 1.5px solid #ddd; border-radius: 10px; font-size: 14px; box-sizing: border-box; }
+        button { cursor: pointer; border-radius: 10px; font-weight: 600; border: none; font-size: 14px; width: 100%; padding: 12px; margin-top: 8px; }
+        .btn-main { background: var(--primary); color: white; }
+        .btn-back { background: #eee; color: #555; }
+        .form-view { background: #fdfdfd; padding: 15px; border-radius: 15px; border: 1px solid #eee; text-align: left; margin-top: 10px; }
+        
+        .req-card { background: #fff; border: 1.5px solid #eee; padding: 12px; border-radius: 12px; margin-bottom: 10px; font-size: 13px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+
+        .progress-container { background: #eee; border-radius: 10px; height: 16px; width: 100%; margin-top: 8px; overflow: hidden; position: relative; }
+        .progress-bar { background: var(--gold); height: 100%; width: 0%; transition: width 0.4s ease; }
+        .progress-text { position: absolute; width: 100%; text-align: center; font-size: 11px; font-weight: bold; color: #333; top: 0; line-height: 16px; }
+        .ledger-box { background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 13px; }
+        .ledger-row { display: flex; justify-content: space-between; margin-bottom: 4px; color: #4a5568; }
+        .ledger-row strong { color: var(--navy); }
+
+        .chat-container { border: 1px solid #ddd; border-radius: 12px; height: 260px; overflow-y: auto; padding: 10px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+        .chat-bubble { padding: 8px 12px; border-radius: 14px; max-width: 80%; font-size: 13px; line-height: 1.4; word-wrap: break-word; }
+        .chat-incoming { background: #e2e8f0; align-self: flex-start; color: #333; }
+        .chat-outgoing { background: var(--primary); align-self: flex-end; color: white; }
+        .chat-meta { font-size: 10px; font-weight: bold; display: block; margin-bottom: 2px; color: #718096; }
+        .chat-outgoing .chat-meta { color: #e2e8f0; }
+        .chat-media { max-width: 100%; border-radius: 8px; margin-top: 4px; }
+        .typing-indicator { font-size: 11px; color: #718096; font-style: italic; min-height: 16px; margin-top: 4px; text-align: left; }
+
+        .footer-branding { font-size: 12px; color: #a0aec0; letter-spacing: 0.5px; margin-top: auto; padding: 10px 0; font-weight: 500; }
+
+        /* NOTIFICATION BADGE STYLING */
+        .notif-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: var(--red);
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: pulseBadge 1.5s infinite alternate;
+        }
+
+        @keyframes pulseBadge {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.15); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="icon.png" alt="Sacco Logo" style="width: 55px; border-radius: 10px; margin-bottom: 5px;" onerror="this.style.display='none'">
+        <h1 style="margin:0; color:var(--navy); font-size: 22px;">WPowerSacco</h1>
+        <span class="motto">"The strength of collective effort"</span>
+
+        <!-- LOGIN SECTION -->
+        <div id="loginSection">
+            <input type="text" id="loginId" placeholder="Login ID (Admin or Member ID)">
+            <input type="password" id="loginPin" placeholder="PIN">
+            <button class="btn-main" onclick="handleLogin()">LOGIN</button>
+        </div>
+
+        <!-- ADMIN PORTAL -->
+        <div id="adminPortal" class="hidden">
+            <h3 style="color:var(--navy); margin-bottom:5px;">Treasurer Control</h3>
+            
+            <div class="ledger-box">
+                <div class="ledger-row"><span>Total Savings Base:</span><span id="ledgerSavings">UGX 0</span></div>
+                <div class="ledger-row"><span>Total Share Capital:</span><span id="ledgerShares">UGX 0</span></div>
+                <div class="ledger-row" style="border-top: 1px solid #eee; padding-top: 4px; margin-top: 4px; color: var(--green);">
+                    <span>Accumulated Share Profits (60% Pool):</span><span id="ledgerShareProfits">UGX 0</span>
+                </div>
+                <div class="ledger-row" style="color: var(--primary);">
+                    <span>Re-investment Capital (28% Pool):</span><span id="ledgerReinvest">UGX 0</span>
+                </div>
+                <div class="ledger-row" style="color: var(--orange);">
+                    <span>SACCO Expense Reserve (12% Pool):</span><span id="ledgerReserve">UGX 0</span>
+                </div>
+                <div class="ledger-row" style="border-top: 1px solid #ddd; padding-top: 4px; margin-top: 4px;">
+                    <strong>TOTAL SYSTEM ASSETS:</strong><strong id="totalAssets" style="color: var(--navy);">UGX 0</strong>
+                </div>
+            </div>
+            
+            <div id="adminMenu" class="grid">
+                <div class="card" onclick="openAdminView('aUser')">👤 <span class="card-label">Accounts</span></div>
+                <div class="card" onclick="openAdminView('aSav')">💰 <span class="card-label">Add Saving</span></div>
+                <div class="card" onclick="openAdminView('aLon')">🏦 <span class="card-label">Loan Tools</span></div>
+                <div class="card" onclick="openAdminView('aReq')">📨 <span class="card-label">Requests</span></div>
+                <div class="card" onclick="openAdminView('aShr')">📊 <span class="card-label">Share Registry</span></div>
+                <div class="card" onclick="openAdminView('aMsg')">💬 <span class="card-label">Messaging</span></div>
+                <div class="card" onclick="openAdminView('aYnd')">⏳ <span class="card-label">Year End Reset</span></div>
+                <div class="card" onclick="location.reload()">🚪 <span class="card-label">Logout</span></div>
+            </div>
+
+            <div id="adminViewArea" class="hidden">
+                <div id="aUser" class="form-view hidden">
+                    <h4>Manage Members</h4>
+                    <input type="text" id="newFullName" placeholder="Full Name">
+                    <input type="text" id="newUserId" placeholder="Assign ID (e.g. WPS001)">
+                    <input type="password" id="newUserPin" placeholder="Assign PIN">
+                    <button class="btn-main" onclick="createAccount()">Create Account</button>
+                    <hr>
+                    <select id="delUserList" class="m-list"></select>
+                    <button style="background:var(--red); color:white;" onclick="deleteAccount()">Delete Account</button>
+                </div>
+
+                <div id="aSav" class="form-view hidden">
+                    <h4>Add Savings</h4>
+                    <select id="savUserList" class="m-list"></select>
+                    <input type="number" id="admSavAmt" placeholder="Amount (UGX)">
+                    <button class="btn-main" onclick="processAdminTask('saving')">Confirm Deposit</button>
+                </div>
+
+                <div id="aLon" class="form-view hidden">
+                    <h4>Loan Actions</h4>
+                    <select id="lonUserList" class="m-list"></select>
+                    <input type="number" id="admLonAmt" placeholder="Principal">
+                    <label style="font-size:12px; font-weight:bold; margin-top:5px; display:block;">Select Loan Fund Pool:</label>
+                    <select id="admLonSource">
+                        <option value="savings">Normal Savings Pool</option>
+                        <option value="shares">Share Capital Pool</option>
+                    </select>
+                    <label style="font-size:12px; font-weight:bold; margin-top:5px; display:block;">Duration & Rate:</label>
+                    <select id="admLonDur">
+                        <option value="w1" data-rate="2.5">1 Week (2.5% + 1% Ins)</option>
+                        <option value="w2" data-rate="5.0">2 Weeks (5% + 1% Ins)</option>
+                        <option value="w3" data-rate="7.5">3 Weeks (7.5% + 1% Ins)</option>
+                        <option value="m1" data-rate="10">1 Month (10% + 1% Ins)</option>
+                        <option value="m2" data-rate="20">2 Months (20% + 1% Ins)</option>
+                        <option value="m3" data-rate="30">3 Months (30% + 1% Ins)</option>
+                    </select>
+                    <button class="btn-main" onclick="processAdminTask('loan')">Issue Manual Loan</button>
+                    <button style="background:var(--green); color:white; margin-top:15px;" onclick="processAdminTask('settle')">Settle Debt & Auto-Distribute Interest</button>
+                </div>
+
+                <div id="aReq" class="form-view hidden">
+                    <h4>Review Requests</h4>
+                    <div id="requestList">Loading...</div>
+                </div>
+
+                <div id="aShr" class="form-view hidden">
+                    <h4>Global Share Registry</h4>
+                    <label style="font-size:12px; font-weight:bold;">Source Member:</label>
+                    <select id="transferSrcList" class="m-list"></select>
+                    <input type="number" id="transferQty" placeholder="Number of shares to transfer">
+                    <label style="font-size:12px; font-weight:bold;">Destination Member:</label>
+                    <select id="transferDstList" class="m-list"></select>
+                    <button class="btn-main" style="background:var(--orange);" onclick="executeShareTransfer()">Execute Transfer</button>
+                    <hr>
+                    <h5>Total Issued Shares Across SACCO</h5>
+                    <div id="globalShareRegistrySummary" style="font-size:13px; line-height:1.6; background:#fff; padding:10px; border-radius:10px; border:1px solid #eee;"></div>
+                </div>
+
+                <div id="aMsg" class="form-view hidden">
+                    <h4>Send Private Alert</h4>
+                    <select id="msgUserList" class="m-list"></select>
+                    <textarea id="admMsgText" placeholder="Write alert message..."></textarea>
+                    <button class="btn-main" onclick="sendMessage()">Send Notification</button>
+                </div>
+
+                <div id="aYnd" class="form-view hidden">
+                    <h4>Season Maintenance & Profit Distributions</h4>
+                    <div style="background:#fdfdfd; border:1px solid #e2e8f0; padding:12px; border-radius:10px; font-size:13px; margin-bottom:12px;">
+                        <strong>Savings Formula:</strong> Based directly on custom end-of-year calculations:<br>
+                        <code>(Member Savings / Total Savings) * Input Amount</code>
+                    </div>
+                    <label style="font-size:12px; font-weight:bold;">Enter Savings Profit Allocation (UGX):</label>
+                    <input type="number" id="yearlyProfitInput" placeholder="e.g. 3000000">
+                    <button style="background:var(--green); color:white; font-weight:bold;" onclick="triggerYearEndSavingsProfitDrop()">DISTRIBUTE SAVINGS PROFIT</button>
+                    
+                    <hr style="margin:20px 0; opacity:0.3;">
+                    
+                    <h5>System Cycle Structural Reset</h5>
+                    <p style="font-size:11px; color:#7f8c8d; line-height:1.4;">Wipes all outstanding loans, accumulated balances, and dividends to 0 to begin a completely fresh year. Preserves structural profile information and login PIN credentials.</p>
+                    <button style="background:var(--red); color:white; font-weight:bold;" onclick="resetSystemForNewSeason()">RESET FINANCIALS FOR NEW SEASON</button>
+                </div>
+
+                <button class="btn-back" onclick="backToAdminMenu()">BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- MEMBER PORTAL -->
+        <div id="memberPortal" class="hidden">
+            <!-- HEADER WITH NOTIFICATION BELL -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 id="welcomeMsg" style="text-align:left; color:var(--navy); margin:0;"></h3>
+                <div style="position: relative; cursor: pointer;" onclick="openView('vChat')">
+                    <span style="font-size: 24px;">🔔</span>
+                    <span id="unreadHeaderBadge" class="notif-badge">0</span>
+                </div>
+            </div>
+
+            <div id="memberAlert" style="background:#d1ecf1; color:#0c5460; padding:10px; border-radius:10px; font-size:12px; margin-bottom:10px;" class="hidden"></div>
+            
+            <div id="memberMenu" class="grid">
+                <div class="card" onclick="openView('vSav')">💰 <span class="card-label">My Savings</span></div>
+                <div class="card" onclick="openView('vShares')">📈 <span class="card-label">Buy Shares</span></div>
+                <div class="card" onclick="openView('vLon')">🏦 <span class="card-label">My Loan</span></div>
+                <div class="card" onclick="openView('vReq')">📩 <span class="card-label">Request Loan</span></div>
+                <div class="card" onclick="openView('vChat')">
+                    💬 <span class="card-label">Group Chat</span>
+                    <span id="unreadCardBadge" class="notif-badge">0</span>
+                </div>
+                <div class="card" onclick="openView('vPin')">⚙️ <span class="card-label">Settings</span></div>
+            </div>
+
+            <div id="viewArea" class="hidden">
+                <div id="vSav" class="form-view hidden">
+                    <div class="balance-box"><span>SAVINGS BALANCE</span><div id="mSavVal" class="amount">UGX 0</div></div>
+                    <div style="font-size:13px; color:#555; background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #ddd; margin-top:10px;">
+                        • Year-End Savings Profits: <span id="mSavingsDividends" style="font-weight:bold; color:var(--primary);">UGX 0</span>
+                    </div>
+                </div>
+
+                <div id="vShares" class="form-view hidden">
+                    <h4>Sacco Share Portal</h4>
+                    <div class="balance-box" style="background:var(--navy);">
+                        <span>MY SHARES HELD</span>
+                        <div id="mSharesCount" class="amount">0 Shares</div>
+                        <span style="font-size:11px; color:var(--gold); display:block; margin-top:4px;" id="mSharesValue">Value: UGX 0</span>
+                        <div class="progress-container">
+                            <div id="sharesProgressBar" class="progress-bar"></div>
+                            <div id="sharesProgressText" class="progress-text">0/10 (0%)</div>
+                        </div>
+                    </div>
+                    <label style="font-size:13px; font-weight:bold;">Purchase Quantity (UGX 20,000 each):</label>
+                    <input type="number" id="buySharesQty" min="1" max="10" placeholder="Number of shares to buy">
+                    <button class="btn-main" style="background:var(--gold); color:#222;" onclick="purchaseShares()">BUY SHARES FROM SAVINGS</button>
+                    <hr>
+                    <div style="font-size:13px; color:#555; background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #ddd;">
+                        • My Earned Share Profits: <span id="mSharesDividends" style="font-weight:bold; color:var(--green);">UGX 0</span>
+                    </div>
+                </div>
+
+                <div id="vLon" class="form-view hidden">
+                    <div class="balance-box" style="background:var(--orange)"><span>TOTAL DEBT</span><div id="mLonVal" class="amount">UGX 0</div></div>
+                </div>
+
+                <div id="vReq" class="form-view hidden">
+                    <h4>Loan Application</h4>
+                    <input type="hidden" id="reqSource" value="savings">
+                    <label style="font-size:12px; font-weight:bold; margin-top:5px; display:block;">Amount (UGX):</label>
+                    <input type="number" id="reqAmount" placeholder="Amount (UGX)" oninput="calculateTotal()">
+                    <label style="font-size:12px; font-weight:bold; margin-top:5px; display:block;">Duration Selection:</label>
+                    <select id="reqDuration" onchange="calculateTotal()">
+                        <option value="" disabled selected>-- Choose Duration --</option>
+                        <option value="w1" data-rate="2.5">1 Week (2.5% + 1% Ins)</option>
+                        <option value="w2" data-rate="5.0">2 Weeks (5% + 1% Ins)</option>
+                        <option value="w3" data-rate="7.5">3 Weeks (7.5% + 1% Ins)</option>
+                        <option value="m1" data-rate="10">1 Month (10% + 1% Ins)</option>
+                        <option value="m2" data-rate="20">2 Months (20% + 1% Ins)</option>
+                        <option value="m3" data-rate="30">3 Months (30% + 1% Ins)</option>
+                    </select>
+                    <textarea id="reqReason" placeholder="Reason for the loan..."></textarea>
+                    <div style="background:#fff3cd; padding:10px; border-radius:10px; font-size:13px; color:#856404;" id="totalReturn">Calculate Total...</div>
+                    <button class="btn-main" onclick="submitLoanRequest()">SUBMIT REQUEST</button>
+                </div>
+
+                <div id="vChat" class="form-view hidden">
+                    <h4>Sacco Members Chatroom</h4>
+                    <div id="chatBoxArea" class="chat-container"></div>
+                    <div id="typingIndicator" class="typing-indicator"></div>
+                    <input type="file" id="chatMediaInput" accept="image/*,video/*,audio/*" class="hidden" onchange="handleMediaSelection(event)">
+                    <div style="display:flex; gap:5px; margin-top:8px; align-items:center;">
+                        <button type="button" onclick="document.getElementById('chatMediaInput').click()" style="width:40px; margin:0; padding:10px; background:#e2e8f0; color:#333;" title="Attach Image/Video">📁</button>
+                        <button type="button" id="recordVoiceBtn" onclick="toggleVoiceRecording()" style="width:40px; margin:0; padding:10px; background:#e2e8f0; color:#333;" title="Record Voice Note">🎙️</button>
+                        <input type="text" id="chatMessageInput" placeholder="Type group message..." style="margin:0; flex:1;" oninput="handleTyping()">
+                        <button class="btn-main" style="margin:0; width:70px;" onclick="sendGroupChatMessage()">SEND</button>
+                    </div>
+                </div>
+                
+                <div id="vPin" class="form-view hidden">
+                    <h4>Change PIN</h4>
+                    <input type="password" id="newPin" placeholder="New PIN">
+                    <button class="btn-main" onclick="changePin()">Update PIN</button>
+                </div>
+                <button class="btn-back" onclick="backToMenu()">BACK</button>
+            </div>
+            <button class="btn-back" style="margin-top:20px;" onclick="location.reload()">LOGOUT</button>
+        </div>
+    </div>
+
+    <div class="footer-branding">All rights reserved by JDKM SOLUTIONS</div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCl3KNh2wQ3d7k9UHL4-yk8Uu5_26FdZCQ",
+            authDomain: "workingpowersaccol.firebaseapp.com",
+            databaseURL: "https://workingpowersaccol-default-rtdb.firebaseio.com",
+            projectId: "workingpowersaccol",
+            storageBucket: "workingpowersaccol.firebasestorage.app",
+            messagingSenderId: "772127893250",
+            appId: "1:772127893250:web:0a644a22fd11094857441b"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        let userKey = "";
+        let currentMemberName = "";
+        let totalMessagesCount = 0;
+
+        // Media & Voice States
+        let selectedMediaBase64 = null;
+        let selectedMediaType = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let typingTimeout = null;
+
+        // --- NAVIGATION & VIEWS ---
+        function handleLogin() {
+            const u = document.getElementById('loginId').value.trim();
+            const p = document.getElementById('loginPin').value.trim();
+            if (!u || !p) return alert("Please enter Login ID and PIN");
+
+            if (u === "Admin" && p === "Bwogable") { 
+                showAdminPortal(); 
+            } else {
+                db.ref('members/' + u).once('value', s => {
+                    const d = s.val();
+                    if(d && d.pin === p) { 
+                        showMemberPortal(u); 
+                    } else { 
+                        alert("Invalid Credentials"); 
+                    }
+                });
+            }
+        }
+
+        function showAdminPortal() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('adminPortal').classList.remove('hidden');
+            
+            db.ref('corporate_ledger').on('value', snap => {
+                const ledger = snap.val() || { reinvestmentPool: 0, reserveFund: 0, globalShareProfitsAccumulated: 0 };
+                document.getElementById('ledgerShareProfits').innerText = "UGX " + (ledger.globalShareProfitsAccumulated || 0).toLocaleString();
+                document.getElementById('ledgerReinvest').innerText = "UGX " + (ledger.reinvestmentPool || 0).toLocaleString();
+                document.getElementById('ledgerReserve').innerText = "UGX " + (ledger.reserveFund || 0).toLocaleString();
+                updateGlobalAssetsDisplay();
+            });
+
+            db.ref('members').on('value', snap => {
+                let totalSavings = 0; let totalSharesVal = 0; let options = ""; let registrySummaryText = "";
+                snap.forEach(m => {
+                    const memberData = m.val(); 
+                    const sCount = memberData.shares || 0;
+                    totalSavings += (memberData.savings || 0); 
+                    totalSharesVal += (sCount * 20000);
+                    options += `<option value="${m.key}">${memberData.fullName} (${m.key})</option>`;
+                    registrySummaryText += `• <strong>${memberData.fullName} (${m.key}):</strong> ${sCount} Shares | Share Earned: UGX ${(memberData.receivedProfitsShares || 0).toLocaleString()} | Savings Profit: UGX ${(memberData.receivedProfitsSavings || 0).toLocaleString()}<br>`;
+                });
+                document.querySelectorAll('.m-list').forEach(sel => sel.innerHTML = options);
+                document.getElementById('ledgerSavings').innerText = "UGX " + totalSavings.toLocaleString();
+                document.getElementById('ledgerShares').innerText = "UGX " + totalSharesVal.toLocaleString();
+                document.getElementById('globalShareRegistrySummary').innerHTML = registrySummaryText || "No members registered.";
+                updateGlobalAssetsDisplay();
+            });
+
+            db.ref('requests').on('value', snap => {
+                const list = document.getElementById('requestList'); 
+                list.innerHTML = snap.exists() ? "" : "No pending requests.";
+                snap.forEach(r => {
+                    const d = r.val(); 
+                    const dRate = d.rate || 0; 
+                    const dDur = d.duration || '1 Week';
+                    list.innerHTML += `<div class="req-card">
+                        <select id="reroute_${r.key}" style="padding:5px; font-size:12px; margin-bottom:8px; width:100%;">
+                            <option value="savings" ${d.source === 'savings' ? 'selected' : ''}>Normal Savings Pool</option>
+                            <option value="shares" ${d.source === 'shares' ? 'selected' : ''}>Share Capital Pool</option>
+                        </select>
+                        <span class="badge" style="background:#eee; color:#333;">FROM: ${d.userId}</span><br>
+                        <b>UGX ${parseInt(d.amount).toLocaleString()}</b> for ${dDur} (${dRate}%)<br>
+                        <button style="background:var(--green); color:white; width:48%;" onclick="approveLoan('${r.key}', '${d.userId}', ${d.amount})">Approve</button>
+                        <button style="background:var(--red); color:white; width:48%;" onclick="db.ref('requests/${r.key}').remove()">Reject</button>
+                    </div>`;
+                });
+            });
+        }
+
+        function showMemberPortal(id) {
+            userKey = id; // Set ID immediately so local storage keys align cleanly per member
+            
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('memberPortal').classList.remove('hidden');
+
+            db.ref('members/' + id).on('value', snap => {
+                const d = snap.val();
+                if(!d) return;
+                
+                currentMemberName = d.fullName;
+                document.getElementById('welcomeMsg').innerText = "Welcome, " + d.fullName;
+                document.getElementById('mSavVal').innerText = "UGX " + (d.savings || 0).toLocaleString();
+                document.getElementById('mLonVal').innerText = "UGX " + (d.toPay || 0).toLocaleString();
+                document.getElementById('mSavingsDividends').innerText = "UGX " + (d.receivedProfitsSavings || 0).toLocaleString();
+                document.getElementById('mSharesDividends').innerText = "UGX " + (d.receivedProfitsShares || 0).toLocaleString();
+
+                const sharesCount = d.shares || 0;
+                document.getElementById('mSharesCount').innerText = sharesCount + " Shares";
+                document.getElementById('mSharesValue').innerText = "Value: UGX " + (sharesCount * 20000).toLocaleString();
+                
+                const pct = Math.min((sharesCount / 10) * 100, 100);
+                document.getElementById('sharesProgressBar').style.width = pct + "%";
+                document.getElementById('sharesProgressText').innerText = `${sharesCount}/10 (${pct.toFixed(0)}%)`;
+
+                const alertBox = document.getElementById('memberAlert');
+                if (d.message) {
+                    alertBox.innerText = d.message;
+                    alertBox.classList.remove('hidden');
+                } else {
+                    alertBox.classList.add('hidden');
+                }
+            });
+
+            initNotificationBellListener();
+            listenToGroupChatRoom();
+        }
+
+        function initNotificationBellListener() {
+            db.ref('sacco_group_chat').off(); // Detach prior listeners
+            
+            // Limit query to last item for instant execution
+            db.ref('sacco_group_chat').limitToLast(1).on('value', () => {
+                db.ref('sacco_group_chat').once('value', snap => {
+                    totalMessagesCount = snap.numChildren();
+                    
+                    // Fetch Member's last seen baseline from local storage
+                    const storedLastSeen = localStorage.getItem('lastSeenMsgCount_' + userKey);
+                    const lastSeenCount = storedLastSeen !== null ? parseInt(storedLastSeen) : 0;
+                    
+                    // Calculate exact unread delta
+                    const unreadCount = Math.max(0, totalMessagesCount - lastSeenCount);
+                    
+                    const headerBadge = document.getElementById('unreadHeaderBadge');
+                    const cardBadge = document.getElementById('unreadCardBadge');
+
+                    if (unreadCount > 0) {
+                        const displayVal = unreadCount > 99 ? '99+' : unreadCount;
+                        if (headerBadge) {
+                            headerBadge.innerText = displayVal;
+                            headerBadge.style.display = 'block';
+                        }
+                        if (cardBadge) {
+                            cardBadge.innerText = displayVal;
+                            cardBadge.style.display = 'block';
+                        }
+                    } else {
+                        if (headerBadge) headerBadge.style.display = 'none';
+                        if (cardBadge) cardBadge.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        function openAdminView(viewId) {
+            document.getElementById('adminMenu').classList.add('hidden');
+            document.getElementById('adminViewArea').classList.remove('hidden');
+            document.querySelectorAll('#adminViewArea .form-view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        function backToAdminMenu() {
+            document.getElementById('adminViewArea').classList.add('hidden');
+            document.getElementById('adminMenu').classList.remove('hidden');
+        }
+
+        function openView(viewId) {
+            document.getElementById('memberMenu').classList.add('hidden');
+            document.getElementById('viewArea').classList.remove('hidden');
+            document.querySelectorAll('#viewArea .form-view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+
+            if (viewId === 'vChat') {
+                // Update specific user's read marker and clear badges
+                localStorage.setItem('lastSeenMsgCount_' + userKey, totalMessagesCount);
+                const headerBadge = document.getElementById('unreadHeaderBadge');
+                const cardBadge = document.getElementById('unreadCardBadge');
+                if (headerBadge) headerBadge.style.display = 'none';
+                if (cardBadge) cardBadge.style.display = 'none';
+            }
+        }
+
+        function backToMenu() {
+            document.getElementById('viewArea').classList.add('hidden');
+            document.getElementById('memberMenu').classList.remove('hidden');
+        }
+
+        function updateGlobalAssetsDisplay() {
+            const sVal = parseInt(document.getElementById('ledgerSavings').innerText.replace(/[^0-9]/g, '')) || 0;
+            const shVal = parseInt(document.getElementById('ledgerShares').innerText.replace(/[^0-9]/g, '')) || 0;
+            const shrPf = parseInt(document.getElementById('ledgerShareProfits').innerText.replace(/[^0-9]/g, '')) || 0;
+            const reVal = parseInt(document.getElementById('ledgerReinvest').innerText.replace(/[^0-9]/g, '')) || 0;
+            const resVal = parseInt(document.getElementById('ledgerReserve').innerText.replace(/[^0-9]/g, '')) || 0;
+            document.getElementById('totalAssets').innerText = "UGX " + (sVal + shVal + shrPf + reVal + resVal).toLocaleString();
+        }
+
+        // --- ADMINISTRATIVE ACTIONS ---
+        function createAccount() {
+            const fn = document.getElementById('newFullName').value.trim();
+            const id = document.getElementById('newUserId').value.trim();
+            const pin = document.getElementById('newUserPin').value.trim();
+
+            if (!fn || !id || !pin) return alert("Please fill all fields!");
+
+            db.ref('members/' + id).set({
+                fullName: fn,
+                pin: pin,
+                savings: 0,
+                shares: 0,
+                toPay: 0,
+                receivedProfitsSavings: 0,
+                receivedProfitsShares: 0
+            }).then(() => {
+                alert("Account Created!");
+                document.getElementById('newFullName').value = "";
+                document.getElementById('newUserId').value = "";
+                document.getElementById('newUserPin').value = "";
+                backToAdminMenu();
+            });
+        }
+
+        function deleteAccount() {
+            const id = document.getElementById('delUserList').value;
+            if(!id) return;
+            if (confirm("Delete user " + id + "?")) {
+                db.ref('members/' + id).remove().then(() => {
+                    alert("User Deleted!");
+                    backToAdminMenu();
+                });
+            }
+        }
+
+        function processAdminTask(task) {
+            if (task === 'saving') {
+                const uid = document.getElementById('savUserList').value;
+                const amt = parseInt(document.getElementById('admSavAmt').value);
+                if (!amt || amt <= 0) return alert("Enter valid amount");
+
+                db.ref('members/' + uid + '/savings').transaction(cur => (cur || 0) + amt, () => {
+                    alert("Savings Added Successfully!");
+                    document.getElementById('admSavAmt').value = "";
+                    backToAdminMenu();
+                });
+            } else if (task === 'loan') {
+                const uid = document.getElementById('lonUserList').value;
+                const amt = parseInt(document.getElementById('admLonAmt').value);
+                const sel = document.getElementById('admLonDur');
+                const rate = parseFloat(sel.options[sel.selectedIndex].getAttribute('data-rate'));
+
+                if (!amt || amt <= 0) return alert("Enter valid principal amount");
+                const totalToPay = Math.round(amt + (amt * (rate + 1) / 100));
+
+                db.ref('members/' + uid).update({
+                    toPay: totalToPay,
+                    lastLoanInterestCalculated: Math.round(amt * (rate / 100))
+                }).then(() => {
+                    alert("Loan Issued Successfully!");
+                    document.getElementById('admLonAmt').value = "";
+                    backToAdminMenu();
+                });
+            } else if (task === 'settle') {
+                const uid = document.getElementById('lonUserList').value;
+                db.ref('members/' + uid).once('value', snap => {
+                    const d = snap.val();
+                    if(!d || !d.toPay || d.toPay <= 0) return alert("Member has no outstanding debt!");
+
+                    const interestEarned = d.lastLoanInterestCalculated || 0;
+                    db.ref('members/' + uid).update({ toPay: 0, lastLoanInterestCalculated: 0 }).then(() => {
+                        if (interestEarned > 0) {
+                            executeRealtimeLoanProfitSplit(interestEarned);
+                        }
+                        alert("Debt Cleared & Profit Distributed!");
+                        backToAdminMenu();
+                    });
+                });
+            }
+        }
+
+        function approveLoan(reqKey, uid, amount) {
+            const sourcePool = document.getElementById('reroute_' + reqKey).value;
+            db.ref('requests/' + reqKey).once('value', snap => {
+                const req = snap.val();
+                const rate = req.rate || 0;
+                const totalToPay = Math.round(amount + (amount * (rate + 1) / 100));
+
+                db.ref('members/' + uid).update({
+                    toPay: totalToPay,
+                    lastLoanInterestCalculated: Math.round(amount * (rate / 100))
+                });
+
+                db.ref('requests/' + reqKey).remove();
+                alert("Loan Request Approved!");
+            });
+        }
+
+        function executeShareTransfer() {
+            const src = document.getElementById('transferSrcList').value;
+            const dst = document.getElementById('transferDstList').value;
+            const qty = parseInt(document.getElementById('transferQty').value);
+
+            if (src === dst) return alert("Source and destination cannot be the same!");
+            if (!qty || qty <= 0) return alert("Enter valid quantity!");
+
+            db.ref('members/' + src).once('value', sSnap => {
+                const sData = sSnap.val();
+                if ((sData.shares || 0) < qty) return alert("Source member does not have enough shares!");
+
+                db.ref('members/' + src + '/shares').transaction(c => (c || 0) - qty);
+                db.ref('members/' + dst + '/shares').transaction(c => (c || 0) + qty);
+                alert("Shares transferred cleanly!");
+                document.getElementById('transferQty').value = "";
+                backToAdminMenu();
+            });
+        }
+
+        function sendMessage() {
+            const uid = document.getElementById('msgUserList').value;
+            const msgText = document.getElementById('admMsgText').value.trim();
+            if(!msgText) return alert("Please type an alert message statement before executing.");
+            
+            db.ref('members/' + uid).update({ message: msgText }).then(() => {
+                alert("Private dashboard alert dispatched cleanly!");
+                document.getElementById('admMsgText').value = "";
+                backToAdminMenu();
+            });
+        }
+
+        function executeRealtimeLoanProfitSplit(interestProfit) {
+            const memberSharePoolAddition = Math.round(interestProfit * 0.60);
+            const remainder = interestProfit - memberSharePoolAddition;
+            const investmentAddition = Math.round(remainder * 0.70);
+            const reserveAddition = remainder - investmentAddition;
+
+            db.ref('corporate_ledger').once('value', snap => {
+                const existing = snap.val() || { reinvestmentPool: 0, reserveFund: 0, globalShareProfitsAccumulated: 0 };
+                db.ref('corporate_ledger').update({
+                    globalShareProfitsAccumulated: (existing.globalShareProfitsAccumulated || 0) + memberSharePoolAddition,
+                    reinvestmentPool: (existing.reinvestmentPool || 0) + investmentAddition,
+                    reserveFund: (existing.reserveFund || 0) + reserveAddition
+                });
+            });
+
+            db.ref('members').once('value', snap => {
+                let totalSaccoShares = 0;
+                snap.forEach(m => { totalSaccoShares += (m.val().shares || 0); });
+                
+                if (totalSaccoShares > 0) {
+                    snap.forEach(m => {
+                        const sharesOwned = m.val().shares || 0;
+                        if (sharesOwned > 0) {
+                            const calculatedDividend = (sharesOwned / totalSaccoShares) * memberSharePoolAddition;
+                            db.ref('members/' + m.key).child('receivedProfitsShares').transaction(current => (current || 0) + Math.round(calculatedDividend));
+                        }
+                    });
+                }
+            });
+        }
+
+        function triggerYearEndSavingsProfitDrop() {
+            const amtIn = document.getElementById('yearlyProfitInput').value.trim();
+            if(!amtIn || isNaN(amtIn) || parseInt(amtIn) <= 0) return alert("Enter valid total amount");
+            const totalSavingsProfit = parseInt(amtIn);
+
+            db.ref('members').once('value', snap => {
+                let totalSavingsDenom = 0;
+                snap.forEach(m => { totalSavingsDenom += (m.val().savings || 0); });
+
+                if (totalSavingsDenom <= 0) return alert("Global Sacco savings base is zero.");
+
+                snap.forEach(m => {
+                    const savingsBalance = m.val().savings || 0;
+                    const calculatedDrop = (savingsBalance / totalSavingsDenom) * totalSavingsProfit;
+                    db.ref('members/' + m.key).update({
+                        receivedProfitsSavings: (m.val().receivedProfitsSavings || 0) + Math.round(calculatedDrop),
+                        message: `End of Year: Savings profit share of UGX ${Math.round(calculatedDrop).toLocaleString()} dropped to your account layout!`
+                    });
+                });
+
+                alert("Savings profits pushed successfully to all member accounts.");
+                document.getElementById('yearlyProfitInput').value = "";
+                backToAdminMenu();
+            });
+        }
+
+        function resetSystemForNewSeason() {
+            const firstCheck = confirm("⚠️ CRITICAL SECURITY WARNING: This action permanently overwrites and clears all member balance values, loans, and transaction allocations for a new cycle season. Do you want to proceed?");
+            if (!firstCheck) return;
+
+            const strictEntry = prompt("To confirm this institutional administrative drop, please type 'RESET' exactly below:");
+            if (strictEntry !== "RESET") {
+                alert("Verification failure. Maintenance window execution cancelled.");
+                return;
+            }
+
+            db.ref('members').once('value', snap => {
+                let batchUpdates = {};
+                snap.forEach(m => {
+                    batchUpdates[`members/${m.key}/savings`] = 0;
+                    batchUpdates[`members/${m.key}/shares`] = 0;
+                    batchUpdates[`members/${m.key}/toPay`] = 0;
+                    batchUpdates[`members/${m.key}/receivedProfitsShares`] = 0;
+                    batchUpdates[`members/${m.key}/receivedProfitsSavings`] = 0;
+                    batchUpdates[`members/${m.key}/lastLoanInterestCalculated`] = 0;
+                    batchUpdates[`members/${m.key}/message`] = "A completely fresh savings and credit season cycle has officially begun! Operational balances set to UGX 0.";
+                });
+
+                db.ref('requests').remove();
+                db.ref('sacco_group_chat').remove();
+                
+                db.ref('corporate_ledger').set({
+                    globalShareProfitsAccumulated: 0,
+                    reinvestmentPool: 0,
+                    reserveFund: 0
+                });
+
+                db.ref().update(batchUpdates, (err) => {
+                    if (err) {
+                        alert("Database validation error occurred: " + err.message);
+                    } else {
+                        alert("🎉 Cycle maintenance processing complete! All global balances are cleanly set to 0.");
+                        backToAdminMenu();
+                    }
+                });
+            });
+        }
+
+        // --- MEMBER PORTAL ACTIONS ---
+        function purchaseShares() {
+            const qty = parseInt(document.getElementById('buySharesQty').value);
+            if (!qty || qty <= 0) return alert("Enter valid quantity");
+
+            const cost = qty * 20000;
+            db.ref('members/' + userKey).once('value', snap => {
+                const d = snap.val();
+                if ((d.savings || 0) < cost) return alert("Insufficient savings balance to buy shares!");
+                if ((d.shares || 0) + qty > 10) return alert("Cannot own more than 10 shares limit!");
+
+                db.ref('members/' + userKey).update({
+                    savings: d.savings - cost,
+                    shares: (d.shares || 0) + qty
+                }).then(() => {
+                    alert("Purchased " + qty + " share(s) successfully!");
+                    document.getElementById('buySharesQty').value = "";
+                    backToMenu();
+                });
+            });
+        }
+
+        function calculateTotal() {
+            const amt = parseFloat(document.getElementById('reqAmount').value) || 0;
+            const sel = document.getElementById('reqDuration');
+            if (!sel.value) return;
+            const rate = parseFloat(sel.options[sel.selectedIndex].getAttribute('data-rate')) || 0;
+            
+            const total = amt + (amt * (rate + 1) / 100);
+            document.getElementById('totalReturn').innerText = `Total Payable: UGX ${Math.round(total).toLocaleString()} (${rate}% Interest + 1% Insurance)`;
+        }
+
+        function submitLoanRequest() {
+            const amt = parseFloat(document.getElementById('reqAmount').value);
+            const sel = document.getElementById('reqDuration');
+            const reason = document.getElementById('reqReason').value.trim();
+            
+            if (!amt || !sel.value || !reason) return alert("Please fill in all loan request fields");
+            
+            const rate = parseFloat(sel.options[sel.selectedIndex].getAttribute('data-rate'));
+            const durationText = sel.options[sel.selectedIndex].text;
+
+            db.ref('requests').push({
+                userId: userKey,
+                amount: amt,
+                rate: rate,
+                duration: durationText,
+                reason: reason,
+                source: document.getElementById('reqSource').value,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                alert("Loan Request Submitted Successfully!");
+                document.getElementById('reqAmount').value = "";
+                document.getElementById('reqReason').value = "";
+                backToMenu();
+            });
+        }
+
+        function changePin() {
+            const np = document.getElementById('newPin').value.trim();
+            if (!np) return alert("Enter new PIN");
+            db.ref('members/' + userKey).update({ pin: np }).then(() => {
+                alert("PIN Updated Successfully!");
+                document.getElementById('newPin').value = "";
+                backToMenu();
+            });
+        }
+
+        // --- GROUP CHAT & MEDIA FEATURES ---
+        function listenToGroupChatRoom() {
+            db.ref('sacco_group_chat').limitToLast(40).on('value', snap => {
+                const area = document.getElementById('chatBoxArea'); 
+                area.innerHTML = "";
+                snap.forEach(msgNode => {
+                    const chatObj = msgNode.val();
+                    renderSingleChatMessage(chatObj, chatObj.senderId === userKey ? 'chat-outgoing' : 'chat-incoming');
+                });
+                area.scrollTop = area.scrollHeight;
+            });
+
+            db.ref('chat_typing').on('value', snap => {
+                const indicator = document.getElementById('typingIndicator');
+                if (!indicator) return;
+                let typers = [];
+                snap.forEach(child => {
+                    if (child.key !== userKey && child.val() === true) {
+                        typers.push(child.key);
+                    }
+                });
+                indicator.innerText = typers.length > 0 ? `${typers.join(', ')} is typing...` : "";
+            });
+        }
+
+        function renderSingleChatMessage(chatObj, bubbleType) {
+            const area = document.getElementById('chatBoxArea');
+            let contentHtml = chatObj.text ? `<div>${chatObj.text}</div>` : '';
+            if (chatObj.type === 'image' && chatObj.media) {
+                contentHtml += `<img src="${chatObj.media}" class="chat-media">`;
+            } else if (chatObj.type === 'video' && chatObj.media) {
+                contentHtml += `<video src="${chatObj.media}" controls class="chat-media"></video>`;
+            } else if (chatObj.type === 'audio' && chatObj.media) {
+                contentHtml += `<audio src="${chatObj.media}" controls style="width:100%; margin-top:4px;"></audio>`;
+            }
+            area.innerHTML += `<div class="chat-bubble ${bubbleType}"><span class="chat-meta">${chatObj.senderName} (${chatObj.senderId})</span>${contentHtml}</div>`;
+        }
+
+        function handleTyping() {
+            if (!userKey) return;
+            db.ref('chat_typing/' + userKey).set(true);
+            if (typingTimeout) clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                db.ref('chat_typing/' + userKey).remove();
+            }, 2000);
+        }
+
+        function handleMediaSelection(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                selectedMediaBase64 = e.target.result;
+                if (file.type.startsWith('image/')) selectedMediaType = 'image';
+                else if (file.type.startsWith('video/')) selectedMediaType = 'video';
+                else if (file.type.startsWith('audio/')) selectedMediaType = 'audio';
+                alert("Media attached! Tap SEND to post.");
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function toggleVoiceRecording() {
+            const btn = document.getElementById('recordVoiceBtn');
+            if (!isRecording) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    return alert("Audio recording is not supported on this browser/device.");
+                }
+                navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            selectedMediaBase64 = e.target.result;
+                            selectedMediaType = 'audio';
+                            alert("Voice note recorded! Tap SEND to post.");
+                        };
+                        reader.readAsDataURL(audioBlob);
+                    };
+                    mediaRecorder.start();
+                    isRecording = true;
+                    btn.style.background = "var(--red)";
+                    btn.style.color = "white";
+                }).catch(err => alert("Microphone access error: " + err.message));
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                isRecording = false;
+                btn.style.background = "#e2e8f0";
+                btn.style.color = "#333";
+            }
+        }
+
+        function sendGroupChatMessage() {
+            const inputField = document.getElementById('chatMessageInput'); 
+            const messageText = inputField.value.trim(); 
+            if(!messageText && !selectedMediaBase64) return;
+
+            const chatPayload = {
+                senderId: userKey,
+                senderName: currentMemberName || userKey,
+                text: messageText,
+                type: selectedMediaType || 'text',
+                media: selectedMediaBase64 || null,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            renderSingleChatMessage(chatPayload, 'chat-outgoing');
+            const area = document.getElementById('chatBoxArea');
+            area.scrollTop = area.scrollHeight;
+
+            inputField.value = "";
+            document.getElementById('chatMediaInput').value = "";
+            selectedMediaBase64 = null;
+            selectedMediaType = null;
+            db.ref('chat_typing/' + userKey).remove();
+
+            db.ref('sacco_group_chat').push(chatPayload).catch(err => {
+                alert("Failed to deliver message: " + err.message);
+            });
+        }
+    </script>
+</body>
+</html>
