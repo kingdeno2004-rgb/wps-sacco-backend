@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.text({ type: '*/*' })); // Added to catch raw text / plain string payloads from SMS forwarders
+app.use(express.text({ type: '*/*' })); // Catch raw text / plain string payloads from SMS forwarders
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -35,11 +35,9 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
     let message = "";
     if (typeof rawBody === 'string') {
       try {
-        // Try parsing if it came in as a JSON string
         const parsed = JSON.parse(rawBody);
         message = parsed.message || parsed.text || parsed.content || parsed.msg || parsed.q || rawBody;
       } catch (e) {
-        // It's a plain text string payload
         message = rawBody;
       }
     } else if (typeof rawBody === 'object' && rawBody !== null) {
@@ -52,12 +50,12 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
     const amountMatch = message.match(/UGX\s*([\d,]+)/i);
     const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ""), 10) : 0;
 
-    // 2. Extract Reference (e.g., WPS-101 or WPS-101 LOAN)
-    const refMatch = message.match(/(?:Ref|Reference)[:\s]*([A-Z0-9-\s]+?)(?=\.\s*Txn|\.\s*ID|$)/i);
+    // 2. Extract Reference (handles "reference", "rererence", or trailing name text)
+    const refMatch = message.match(/(?:reference|rererence)\s*([a-zA-Z0-9\-]+)/i);
     const rawRef = refMatch ? refMatch[1].trim().toUpperCase() : "";
 
-    // 3. Extract Txn ID
-    const txnMatch = message.match(/(?:Txn ID|Transaction ID|ID)[:\s]*([A-Z0-9]+)/i);
+    // 3. Extract Txn ID (handles "TID" right at the start of the message)
+    const txnMatch = message.match(/(TID\d+)/i);
     const txnId = txnMatch ? txnMatch[1] : `TXN-${Date.now()}`;
 
     if (!amount || !rawRef) {
@@ -151,6 +149,5 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
   }
 });
 
-// Render host binding fix: '0.0.0.0' allows external connections
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`WPS Server listening on port ${PORT}`));
