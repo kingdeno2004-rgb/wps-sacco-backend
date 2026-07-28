@@ -6,6 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: '*/*' })); // Added to catch raw text / plain string payloads from SMS forwarders
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -25,7 +26,26 @@ app.get('/', (req, res) => res.send('WPS SACCO Airtel Webhook Live!'));
 
 app.post('/api/sacco/airtel-webhook', async (req, res) => {
   try {
-    const message = req.body.message || req.body.text || req.body.content || "";
+    // Robust message extraction handling JSON objects, query strings, or raw plain text bodies
+    let rawBody = req.body;
+    if (typeof rawBody === 'object' && rawBody !== null && Buffer.isBuffer(rawBody)) {
+      rawBody = rawBody.toString('utf8');
+    }
+
+    let message = "";
+    if (typeof rawBody === 'string') {
+      try {
+        // Try parsing if it came in as a JSON string
+        const parsed = JSON.parse(rawBody);
+        message = parsed.message || parsed.text || parsed.content || parsed.msg || parsed.q || rawBody;
+      } catch (e) {
+        // It's a plain text string payload
+        message = rawBody;
+      }
+    } else if (typeof rawBody === 'object' && rawBody !== null) {
+      message = rawBody.message || rawBody.text || rawBody.content || rawBody.msg || rawBody.q || "";
+    }
+
     console.log("Raw Airtel SMS received:", message);
 
     // 1. Extract Amount
@@ -41,7 +61,7 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
     const txnId = txnMatch ? txnMatch[1] : `TXN-${Date.now()}`;
 
     if (!amount || !rawRef) {
-      return res.status(200).json({ status: "IGNORED", reason: "Invalid format" });
+      return res.status(200).json({ status: "IGNORED", reason: "Invalid format", receivedContent: message });
     }
 
     // Check duplicate
