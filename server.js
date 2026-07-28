@@ -131,5 +131,6 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
   }
 });
 
+// Render host binding fix: '0.0.0.0' allows external connections
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`WPS Server listening on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`WPS Server listening on port ${PORT}`));
