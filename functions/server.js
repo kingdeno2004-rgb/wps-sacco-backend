@@ -11,11 +11,13 @@ app.use(express.text({ type: '*/*' })); // Catch raw text / plain string payload
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
-    projectId: "workingpowersaccol"
+    projectId: "workingpowersaccol",
+    databaseURL: "https://workingpowersaccol-default-rtdb.firebaseio.com"
   });
 }
 
 const db = admin.firestore();
+const rtdb = admin.database();
 
 function getWeeklyTarget(levelNumber) {
   const level = parseInt(levelNumber, 10) || 1;
@@ -62,7 +64,7 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
       return res.status(200).json({ status: "IGNORED", reason: "Invalid format", receivedContent: message });
     }
 
-    // Check duplicate
+    // Check duplicate in Firestore
     const txnRefDoc = db.collection("transactions").doc(txnId);
     const doc = await txnRefDoc.get();
     if (doc.exists) {
@@ -72,7 +74,7 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
     const isLoanPayment = rawRef.includes("LOAN");
     const cleanMemberRef = rawRef.replace(/\bLOAN\b/g, "").trim();
 
-    // Find member
+    // Find member in Firestore first
     let memberQuery = await db.collection("members").where("memberRef", "==", cleanMemberRef).get();
     if (memberQuery.empty) {
       memberQuery = await db.collection("members").where("name", "==", cleanMemberRef).get();
@@ -86,11 +88,17 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
     const memberId = memberDoc.id;
     const memberData = memberDoc.data();
 
+    // Also bridge sync with Realtime Database (where the Master Audit Dashboard reads from)
+    const rtdbMemberRef = rtdb.ref(`members/${memberId}`);
+    const rtdbSnap = await rtdbMemberRef.once('value');
+    const rtdbData = rtdbSnap.val() || {};
+
     // LOAN REPAYMENT
     if (isLoanPayment) {
-      const currentLoanBalance = memberData.outstandingLoanBalance || 0;
+      const currentLoanBalance = memberData.outstandingLoanBalance !== undefined ? memberData.outstandingLoanBalance : (rtdbData.toPay || 0);
       const newLoanBalance = Math.max(0, currentLoanBalance - amount);
 
+      // Save to Firestore
       await txnRefDoc.set({
         memberRef: cleanMemberRef,
         memberId: memberId,
@@ -105,6 +113,19 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
       await db.collection("members").doc(memberId).update({
         outstandingLoanBalance: newLoanBalance,
         lastLoanPaymentDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Sync Realtime Database (Master Dashboard format)
+      await rtdbMemberRef.update({
+        toPay: newLoanBalance,
+        lastActivity: `LOAN_PAY (Auto) on ${new Date().toLocaleDateString()}`,
+        lastActivityDate: new Date().toISOString()
+      });
+
+      await rtdb.ref(`transactions/${memberId}`).push({
+        type: 'LOAN_PAY',
+        amount: amount,
+        date: new Date().toLocaleString()
       });
 
       return res.status(200).json({ status: "SUCCESS_LOAN_REPAYMENT", amountPaid: amount, newLoanBalance });
@@ -123,6 +144,7 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
       const newPaidUntil = new Date(currentPaidUntil);
       newPaidUntil.setDate(newPaidUntil.getDate() + (weeksCovered * 7));
 
+      // Save to Firestore
       await txnRefDoc.set({
         memberRef: cleanMemberRef,
         memberId: memberId,
@@ -138,6 +160,19 @@ app.post('/api/sacco/airtel-webhook', async (req, res) => {
         totalSavings: admin.firestore.FieldValue.increment(amount),
         paidUntilDate: newPaidUntil,
         lastSavingsDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Sync Realtime Database (Master Dashboard format: updates `savings`)
+      await rtdbMemberRef.child('savings').transaction(c => (c || 0) + amount);
+      await rtdbMemberRef.update({
+        lastActivity: `SAV_CUSTOM (Auto) on ${new Date().toLocaleDateString()}`,
+        lastActivityDate: new Date().toISOString()
+      });
+
+      await rtdb.ref(`transactions/${memberId}`).push({
+        type: 'SAV_CUSTOM',
+        amount: amount,
+        date: new Date().toLocaleString()
       });
 
       return res.status(200).json({ status: "SUCCESS_SAVINGS_DEPOSIT", amountPaid: amount, weeksCovered });
